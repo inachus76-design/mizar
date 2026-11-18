@@ -1,0 +1,17 @@
+{
+  "name": "mizar",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-18",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mizar-minihome",
+      "database_id": "fa9459ba-b3e6-42fa-ae80-812c6d564f31"
+    }
+  ]
+}

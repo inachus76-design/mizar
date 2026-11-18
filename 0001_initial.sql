@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS visits (
+  day TEXT PRIMARY KEY,
+  count INTEGER NOT NULL CHECK (count >= 0)
+);
+CREATE TABLE IF NOT EXISTS guestbook (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  message TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
