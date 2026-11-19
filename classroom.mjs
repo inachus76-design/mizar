@@ -15,7 +15,9 @@ musicManager.hidden = true;
 musicManager.innerHTML = `
   <summary style="cursor:pointer;color:var(--purple);font-size:14px">BGM 관리</summary>
   <form style="margin-top:8px">
-    <label>음원 주소 <input name="url" type="url" maxlength="1500" placeholder="https://…/music.mp3" required></label>
+    <label>음원 파일 <input name="audioFile" type="file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg"></label>
+    <p style="font-size:13px;margin:0;color:var(--muted)">MP3·WAV·OGG, 최대 8MB</p>
+    <label>또는 음원 주소 <input name="url" type="url" maxlength="1500" placeholder="https://…/music.mp3"></label>
     <label>관리번호 <input name="code" type="password" inputmode="numeric" pattern="[0-9]{12,32}" maxlength="32" autocomplete="off" required></label>
     <button type="submit" class="submit">BGM 추가</button>
     <button type="submit" class="submit" name="remove" formnovalidate hidden>BGM 삭제</button>
@@ -72,7 +74,7 @@ function renderSettings(data) {
       document.getElementById('music-status').textContent = '배경음악이 꺼져 있습니다.';
     }
   }
-  musicForm.elements.url.value = data.bgm ?? '';
+  musicForm.elements.url.value = data.bgm?.startsWith('/api/site-settings?audio=') ? '' : data.bgm ?? '';
   musicSave.textContent = data.bgm ? 'BGM 수정' : 'BGM 추가';
   musicRemove.hidden = !data.bgm;
   syncForm();
@@ -110,8 +112,14 @@ musicForm.addEventListener('submit', async event => {
   event.preventDefault();
   const removing = event.submitter === musicRemove;
   if (!musicForm.elements.code.reportValidity()) return;
+  const file = removing ? null : musicForm.elements.audioFile.files[0];
   const url = removing ? '' : musicForm.elements.url.value.trim();
-  if (!removing && !url.startsWith('https://')) {
+  const type = file && ({ mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg' })[file.name.split('.').pop().toLowerCase()];
+  if (file && (!type || file.size > 8 * 1024 * 1024)) {
+    musicResult.textContent = '8MB 이하의 MP3·WAV·OGG 파일을 선택해 주세요.';
+    return;
+  }
+  if (!removing && !file && !url.startsWith('https://')) {
     musicResult.textContent = 'HTTPS로 시작하는 직접 재생 가능한 음원 주소를 입력해 주세요.';
     return;
   }
@@ -120,21 +128,25 @@ musicForm.addEventListener('submit', async event => {
   const code = musicForm.elements.code.value;
   musicForm.elements.code.value = '';
   try {
-    const response = await fetch('/api/site-settings', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'music', url, code })
+    const response = await fetch(file ? '/api/site-settings?upload' : '/api/site-settings', {
+      method: 'POST',
+      headers: file ? { 'Content-Type': type, 'X-Admin-Code': code } : { 'Content-Type': 'application/json' },
+      body: file || JSON.stringify({ action: 'music', url, code })
     });
     const data = await response.json();
     if (!response.ok) {
       musicResult.textContent = ({
         code: '관리번호를 다시 확인해 주세요.',
         setup: 'Cloudflare에 관리번호 설정이 필요합니다.',
-        input: '재생 가능한 HTTPS 음원 주소를 확인해 주세요.'
+        input: '재생 가능한 HTTPS 음원 주소를 확인해 주세요.',
+        format: 'MP3·WAV·OGG 음원 파일을 확인해 주세요.',
+        size: '음원 파일은 8MB까지 올릴 수 있습니다.'
       })[data.error] || '변경 사항을 저장하지 못했습니다.';
       return;
     }
     renderSettings(data);
-    musicResult.textContent = removing ? '배경음악을 삭제했습니다.' : '음원 주소를 저장했습니다. 재생 버튼을 눌러 확인해 주세요.';
+    musicForm.elements.audioFile.value = '';
+    musicResult.textContent = removing ? '배경음악을 삭제했습니다.' : '배경음악을 저장했습니다. 재생 버튼을 눌러 확인해 주세요.';
   } catch {
     musicResult.textContent = '저장하지 못했습니다. 잠시 후 다시 시도해 주세요.';
   } finally {
