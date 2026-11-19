@@ -12,6 +12,52 @@ toolCode.maxLength = 128;
 const playerAudio = document.getElementById('audio');
 let settings = { tools: [], bgm: null };
 let appliedMusic = null;
+let stoppedByVisitor = false;
+let awaitingGesture = false;
+playerAudio.loop = true;
+
+const stopMusic = document.createElement('button');
+stopMusic.type = 'button';
+stopMusic.className = 'submit';
+stopMusic.textContent = '정지';
+stopMusic.style.marginTop = '6px';
+stopMusic.disabled = true;
+const musicStatus = document.getElementById('music-status');
+musicStatus.before(stopMusic);
+
+stopMusic.addEventListener('click', () => {
+  stoppedByVisitor = true;
+  awaitingGesture = false;
+  playerAudio.pause();
+  if (playerAudio.readyState > 0) playerAudio.currentTime = 0;
+});
+document.getElementById('play').addEventListener('click', () => {
+  stoppedByVisitor = true;
+  awaitingGesture = false;
+});
+playerAudio.addEventListener('playing', () => { stopMusic.disabled = false; });
+playerAudio.addEventListener('error', () => { stopMusic.disabled = true; });
+
+async function tryAutoplay() {
+  if (stoppedByVisitor || !appliedMusic) return;
+  awaitingGesture = false;
+  const source = appliedMusic;
+  try {
+    await playerAudio.play();
+  } catch (error) {
+    if (error.name === 'NotAllowedError' && !stoppedByVisitor && source === appliedMusic) {
+      awaitingGesture = true;
+      if (playerAudio.readyState > 0) musicStatus.textContent = '화면을 한 번 누르면 음악이 시작됩니다.';
+    }
+  }
+}
+function resumeOnGesture(event) {
+  if (!awaitingGesture || !event.isTrusted || event.target.closest('button, input, select, textarea, summary, label')) return;
+  if (event.type === 'keydown' && (event.repeat || event.ctrlKey || event.altKey || event.metaKey)) return;
+  void tryAutoplay();
+}
+document.addEventListener('click', resumeOnGesture);
+document.addEventListener('keydown', resumeOnGesture);
 
 const musicManager = document.createElement('details');
 musicManager.style.marginTop = '10px';
@@ -65,11 +111,15 @@ function renderSettings(data) {
   toolEmpty.hidden = data.tools.length > 0;
   if (appliedMusic !== data.bgm) {
     appliedMusic = data.bgm;
+    awaitingGesture = false;
+    stopMusic.disabled = true;
     playerAudio.pause();
     if (data.bgm) {
       document.getElementById('music-status').textContent = '음악 확인 중…';
       playerAudio.src = data.bgm;
       playerAudio.load();
+      stopMusic.disabled = false;
+      void tryAutoplay();
     } else if (data.bgm === '') {
       playerAudio.removeAttribute('src');
       playerAudio.load();
