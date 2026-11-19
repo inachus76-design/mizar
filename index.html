@@ -27,7 +27,7 @@ nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}nav a{text-decoration
 <svg id="room-art" viewBox="0 0 720 360" role="img" aria-label="분홍 책상과 칠판이 있는 송쌤의 도트 교실" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="wall" width="19" height="19" patternUnits="userSpaceOnUse"><rect width="3" height="3" x="5" y="5" fill="#e6cbe7"/></pattern><pattern id="floor" width="60" height="28" patternUnits="userSpaceOnUse"><path d="M0 0h60M30 0v28" stroke="#d5b3df" opacity=".65"/></pattern></defs><path fill="#fae9f3" d="M0 0h720v360H0z"/><path fill="url(#wall)" d="M0 0h720v268H0z"/><path fill="#e8c9eb" d="M0 268h720v92H0z"/><path fill="url(#floor)" d="M0 268h720v92H0z"/><rect x="226" y="41" width="272" height="114" rx="8" fill="#a67584"/><rect x="233" y="48" width="258" height="100" rx="4" fill="#4c7b73"/><text x="362" y="103" text-anchor="middle" fill="#fff6df" font-size="21" font-family="Rounded,sans-serif">T지만 F처럼 공감하기!</text><path d="M451 133h25" stroke="#ffcbe2" stroke-width="4"/><rect x="65" y="45" width="128" height="122" rx="5" fill="#bb9ed4"/><rect x="72" y="52" width="114" height="108" fill="#c9eaff"/><path fill="#e9faff" d="M80 113q12-20 27-7 11-17 27 7zM130 81q9-15 20-7 13-10 22 7z"/><path d="M128 52v108M72 106h114" stroke="#fff3fb" stroke-width="5"/><rect x="550" y="141" width="108" height="129" rx="6" fill="#d0a4d9"/><path d="M556 177h96m-96 43h96m-96 42h96" stroke="#a875b3" stroke-width="5"/><path d="M566 156v18m14-22v22m17-17v17m21 21v22m13-26v26" stroke="#fff2bc" stroke-width="9"/><path fill="#83b49f" d="M596 138q-23-19-19-31 19 0 24 20 0-24 20-31 8 21-12 42z"/><path fill="#f6a9b6" d="M584 131h36l-5 19h-26z"/><ellipse cx="354" cy="312" rx="187" ry="31" fill="#d9b5e3"/><path fill="#8e5875" d="M290 236q-20-65 23-77 62-17 68 44l-3 33z"/><rect x="302" y="177" width="64" height="57" rx="24" fill="#ffd8c7"/><path fill="#8e5875" d="M298 198q31-6 41-25 13 19 31 21l-8-27-35-5-24 13z"/><circle cx="323" cy="205" r="4" fill="#493351"/><path d="M342 206q5-6 10 0m-22 12q5 4 10 0" fill="none" stroke="#493351" stroke-width="2"/><path fill="#b8a4e4" d="M301 254q6-24 32-24 25 0 32 24z"/><path fill="#ae729d" d="M235 264h14v49h-14zm232 0h14v49h-14z"/><rect x="219" y="246" width="279" height="25" rx="6" fill="#eea8c9"/><path fill="#aa91cd" d="M388 216h62l-6 30h-62z"/><path fill="#eee3ff" d="M394 221h49l-4 19h-49z"/><path stroke="#85729e" stroke-width="5" d="M377 246h71"/><path fill="#8db8a2" d="M262 231q-18-6-13-18 12 1 15 12 2-15 13-16 5 15-11 22z"/><path fill="#f3c37e" d="M252 228h23l-4 18h-15z"/></svg>
 <img id="room-image" alt="파스텔 인형집으로 표현한 바다반 공감 교실" hidden style="display:none"></div></section>
 <section class="panel" id="tools"><h2 class="bar">교실 도구</h2><div class="body"><div class="placeholder">타이머 · 뽑기 도구 준비 중</div></div></section>
-<section class="panel" id="guest"><h2 class="bar">방명록</h2><div class="body"><form id="form"><label>이름 <input name="name" maxlength="24" required autocomplete="nickname"></label><label>한마디 <textarea name="message" rows="2" maxlength="200" required></textarea></label><button class="submit">등록</button></form><p id="note" role="status"></p><ul class="entries" id="entries"></ul></div></section></main>
+<section class="panel" id="guest"><h2 class="bar">방명록</h2><div class="body"><form id="form"><label>닉네임 <input name="name" maxlength="20" placeholder="20자까지" required autocomplete="nickname"></label><label>글 <textarea name="message" rows="2" maxlength="200" placeholder="200자까지" required></textarea></label><button class="submit" type="submit">남기기</button></form><p id="note" role="status"></p><ul class="entries" id="entries"></ul></div></section></main>
 </div></div></div>
 <script>
 const byId = id => document.getElementById(id);
@@ -76,7 +76,7 @@ function render(data) {
   byId('today').textContent = data.today;
   byId('total').textContent = data.total;
   entries.replaceChildren();
-  for (const entry of data.entries) {
+  for (const entry of data.entries.slice(0,20)) {
     const item = document.createElement('li'), name = document.createElement('strong'), time = document.createElement('time'), message = document.createElement('p');
     name.textContent = entry.name;
     time.dateTime = entry.createdAt;
@@ -92,7 +92,7 @@ function previewUpdate(action, entry) {
   const day = dayFormat.format(new Date());
   if (preview.day !== day) { preview.day = day; preview.today = 0; }
   if (action === 'visit') { preview.today++; preview.total++; }
-  if (action === 'entry') preview.entries = [{...entry,createdAt:new Date().toISOString()},...preview.entries].slice(0,100);
+  if (action === 'entry') preview.entries = [{...entry,createdAt:new Date().toISOString()},...preview.entries];
   try { localStorage.setItem(previewKey, JSON.stringify(preview)); } catch {}
   return preview;
 }
@@ -107,7 +107,11 @@ if (localMode) note.textContent = '미리보기 기록은 이 브라우저에 �
 form.addEventListener('submit', async event => {
   event.preventDefault();
   const name = form.elements.name.value.trim(), message = form.elements.message.value.trim();
-  if (!name || !message) { note.textContent = '이름과 한마디를 입력해 주세요.'; return; }
+  if (!name || !message) { note.textContent = '닉네임과 글을 입력해 주세요.'; return; }
+  if (form.elements.name.value.length > 20 || form.elements.message.value.length > 200) {
+    note.textContent = '닉네임은 20자, 글은 200자까지 입력할 수 있습니다.';
+    return;
+  }
   const button = form.querySelector('button');
   button.disabled = true;
   await ready;
