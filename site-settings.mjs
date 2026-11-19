@@ -23,7 +23,7 @@ async function sameSecret(input, secret) {
 
 async function settings(db) {
   const [tools, music] = await db.batch([
-    db.prepare('SELECT id, name, url FROM classroom_tools ORDER BY id'),
+    db.prepare('SELECT id, name, url, icon, description, sort_order AS sortOrder FROM classroom_tools ORDER BY sort_order, id'),
     db.prepare("SELECT value FROM site_settings WHERE key = 'bgm'")
   ]);
   return { tools: tools.results, bgm: music.results[0]?.value ?? null };
@@ -131,6 +131,19 @@ export async function siteSettings(request, env) {
 
   const db = env.DB;
   const action = data.action;
+  let tool;
+  if (action === 'add' || action === 'edit') {
+    const name = typeof data.name === 'string' ? data.name.trim() : '';
+    const icon = typeof data.icon === 'string' ? data.icon.trim() || '✦' : '✦';
+    const description = typeof data.description === 'string' ? data.description.trim() : '';
+    const url = data.url === '' ? '' : webUrl(data.url);
+    const order = data.sortOrder === null || data.sortOrder === undefined ? null : data.sortOrder;
+    if (!name || name.length > 60 || icon.length > 16 || description.length > 160 || url === null ||
+        (order !== null && (!Number.isInteger(order) || order < 1 || order > 9999))) {
+      return reply({ error: 'input' }, 400);
+    }
+    tool = [name, url, icon, description, order];
+  }
   if (action === 'music') {
     const url = data.url === '' ? '' : webUrl(data.url);
     if (url === null) return reply({ error: 'input' }, 400);
@@ -141,17 +154,11 @@ export async function siteSettings(request, env) {
     if (action === 'delete') {
       result = await db.prepare('DELETE FROM classroom_tools WHERE id = ?').bind(data.id).run();
     } else {
-      const name = typeof data.name === 'string' ? data.name.trim() : '';
-      const url = webUrl(data.url);
-      if (!name || name.length > 60 || !url) return reply({ error: 'input' }, 400);
-      result = await db.prepare('UPDATE classroom_tools SET name = ?, url = ? WHERE id = ?').bind(name, url, data.id).run();
+      result = await db.prepare('UPDATE classroom_tools SET name = ?, url = ?, icon = ?, description = ?, sort_order = COALESCE(?, sort_order) WHERE id = ?').bind(...tool, data.id).run();
     }
     if (!result.meta.changes) return reply({ error: 'missing' }, 404);
   } else if (action === 'add') {
-    const name = typeof data.name === 'string' ? data.name.trim() : '';
-    const url = webUrl(data.url);
-    if (!name || name.length > 60 || !url) return reply({ error: 'input' }, 400);
-    const result = await db.prepare('INSERT INTO classroom_tools (name, url) SELECT ?, ? WHERE (SELECT COUNT(*) FROM classroom_tools) < 100').bind(name, url).run();
+    const result = await db.prepare('INSERT INTO classroom_tools (name, url, icon, description, sort_order) SELECT ?, ?, ?, ?, COALESCE(?, MIN(9999, COALESCE((SELECT MAX(sort_order) FROM classroom_tools), 0) + 1)) WHERE (SELECT COUNT(*) FROM classroom_tools) < 100').bind(...tool).run();
     if (!result.meta.changes) return reply({ error: 'limit' }, 409);
   } else {
     return reply({ error: 'input' }, 400);

@@ -9,6 +9,37 @@ const toolCode = manager.elements.code;
 toolCode.removeAttribute('pattern');
 toolCode.removeAttribute('inputmode');
 toolCode.maxLength = 128;
+const toolStyle = document.createElement('style');
+toolStyle.textContent = `
+#tool-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+#tool-list:empty{display:none}
+#tool-list .tool-card{display:flex;min-width:0;min-height:154px;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:15px 10px;text-align:center;background:#f5f7ee;border:1px dashed #aeb99d;border-radius:13px;color:#485640;text-decoration:none;overflow-wrap:anywhere}
+#tool-list a.tool-card:hover{background:#ebf0df;border-color:#78896c}
+.tool-card-icon{font-size:29px;line-height:1.15}
+.tool-card-name{font-size:16px}
+.tool-card-description,.tool-card-pending{font-size:13px;color:#5d6853}
+#manager .tool-fields{display:grid;grid-template-columns:75px minmax(0,1fr);gap:8px}
+#manager .tool-fields[hidden]{display:none}
+@media(max-width:850px){#tool-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:390px){#tool-list{grid-template-columns:1fr}}
+`;
+document.head.append(toolStyle);
+const nameLabel = manager.querySelector('[data-name]');
+const urlLabel = manager.querySelector('[data-url]');
+const toolFields = document.createElement('div');
+toolFields.className = 'tool-fields';
+toolFields.innerHTML = '<label>아이콘 <input name="icon" maxlength="16" placeholder="✦"></label>';
+nameLabel.before(toolFields);
+toolFields.append(nameLabel);
+manager.elements.title.placeholder = '예: 우리 반 타이머';
+const descriptionLabel = document.createElement('label');
+descriptionLabel.innerHTML = '설명 <input name="description" maxlength="160" placeholder="예: 수업 시간을 함께 지켜요">';
+urlLabel.before(descriptionLabel);
+const orderLabel = document.createElement('label');
+orderLabel.innerHTML = '표시 순서 <input name="sortOrder" type="number" min="1" max="9999" step="1" placeholder="비우면 기존 순서 유지 또는 맨 뒤"><small>숫자가 작은 도구부터 표시됩니다.</small>';
+urlLabel.after(orderLabel);
+manager.elements.url.placeholder = 'https://… (비우면 준비 중)';
+
 const playerAudio = document.getElementById('audio');
 let settings = { tools: [], bgm: null };
 let appliedMusic = null;
@@ -84,11 +115,16 @@ function syncForm() {
   const tool = settings.tools.find(item => item.id === Number(toolField.value));
   const selecting = action === 'edit' || action === 'delete';
   manager.querySelector('[data-selection]').hidden = !selecting;
-  manager.querySelector('[data-name]').hidden = action === 'music' || action === 'delete';
+  const editingCard = action === 'add' || action === 'edit';
+  toolFields.hidden = descriptionLabel.hidden = orderLabel.hidden = !editingCard;
+  manager.elements.sortOrder.disabled = !editingCard;
+  manager.elements.icon.value = action === 'edit' ? tool?.icon ?? '' : '';
+  manager.elements.description.value = action === 'edit' ? tool?.description ?? '' : '';
+  manager.elements.sortOrder.value = action === 'edit' ? tool?.sortOrder ?? '' : '';
   manager.querySelector('[data-url]').hidden = action === 'delete';
-  manager.querySelector('[data-url-text]').textContent = action === 'music' ? '음원 주소 (비우면 끄기)' : '도구 주소';
+  manager.querySelector('[data-url-text]').textContent = action === 'music' ? '음원 주소 (비우면 끄기)' : '도구 링크 · 선택';
   manager.elements.title.required = action === 'add' || action === 'edit';
-  manager.elements.url.required = action === 'add' || action === 'edit';
+  manager.elements.url.required = false;
   toolField.required = selecting;
   manager.elements.title.value = action === 'edit' ? tool?.name ?? '' : '';
   manager.elements.url.value = action === 'music' ? settings.bgm ?? '' : action === 'edit' ? tool?.url ?? '' : '';
@@ -100,12 +136,34 @@ function renderSettings(data) {
   toolList.replaceChildren();
   toolField.replaceChildren(new Option('도구를 선택하세요', ''));
   for (const tool of data.tools) {
-    const link = document.createElement('a');
-    link.href = tool.url;
-    link.textContent = tool.name;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    toolList.append(link);
+    const card = document.createElement(tool.url ? 'a' : 'article');
+    card.className = 'tool-card';
+    if (tool.url) {
+      card.href = tool.url;
+      card.target = '_blank';
+      card.rel = 'noopener noreferrer';
+    }
+    const icon = document.createElement('span');
+    icon.className = 'tool-card-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = tool.icon || '✦';
+    const name = document.createElement('strong');
+    name.className = 'tool-card-name';
+    name.textContent = tool.name;
+    card.append(icon, name);
+    if (tool.description || !tool.url) {
+      const detail = document.createElement('span');
+      detail.className = 'tool-card-description';
+      detail.textContent = tool.description || '준비 중';
+      card.append(detail);
+    }
+    if (!tool.url && tool.description) {
+      const pending = document.createElement('small');
+      pending.className = 'tool-card-pending';
+      pending.textContent = '준비 중';
+      card.append(pending);
+    }
+    toolList.append(card);
     toolField.add(new Option(tool.name, String(tool.id)));
   }
   toolEmpty.hidden = data.tools.length > 0;
@@ -144,6 +202,8 @@ manager.addEventListener('submit', async event => {
   button.disabled = true;
   const payload = {
     action, id: Number(toolField.value), name: manager.elements.title.value,
+    icon: manager.elements.icon.value, description: manager.elements.description.value,
+    sortOrder: manager.elements.sortOrder.value === '' ? null : manager.elements.sortOrder.valueAsNumber,
     url: manager.elements.url.value.trim(), code: manager.elements.code.value.trim()
   };
   manager.elements.code.value = '';
