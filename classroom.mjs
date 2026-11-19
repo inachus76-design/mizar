@@ -5,6 +5,10 @@ const manager = document.getElementById('manager');
 const result = document.getElementById('manager-status');
 const actionField = manager.elements.action;
 const toolField = manager.elements.tool;
+const toolCode = manager.elements.code;
+toolCode.removeAttribute('pattern');
+toolCode.removeAttribute('inputmode');
+toolCode.maxLength = 128;
 const playerAudio = document.getElementById('audio');
 let settings = { tools: [], bgm: null };
 let appliedMusic = null;
@@ -18,7 +22,7 @@ musicManager.innerHTML = `
     <label>음원 파일 <input name="audioFile" type="file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg"></label>
     <p style="font-size:13px;margin:0;color:var(--muted)">MP3·WAV·OGG, 최대 8MB</p>
     <label>또는 음원 주소 <input name="url" type="url" maxlength="1500" placeholder="https://…/music.mp3"></label>
-    <label>관리번호 <input name="code" type="password" inputmode="numeric" pattern="[0-9]{12,32}" maxlength="32" autocomplete="off" required></label>
+    <label>관리번호 <input name="code" type="password" maxlength="128" autocomplete="off" required></label>
     <button type="submit" class="submit">BGM 추가</button>
     <button type="submit" class="submit" name="remove" formnovalidate hidden>BGM 삭제</button>
   </form>
@@ -90,7 +94,7 @@ manager.addEventListener('submit', async event => {
   button.disabled = true;
   const payload = {
     action, id: Number(toolField.value), name: manager.elements.title.value,
-    url: manager.elements.url.value.trim(), code: manager.elements.code.value
+    url: manager.elements.url.value.trim(), code: manager.elements.code.value.trim()
   };
   manager.elements.code.value = '';
   try {
@@ -125,12 +129,12 @@ musicForm.addEventListener('submit', async event => {
   }
   if (removing && !window.confirm('등록한 배경음악을 삭제할까요?')) return;
   musicSave.disabled = musicRemove.disabled = true;
-  const code = musicForm.elements.code.value;
+  const code = musicForm.elements.code.value.trim();
   musicForm.elements.code.value = '';
   try {
     const response = await fetch(file ? '/api/site-settings?upload' : '/api/site-settings', {
       method: 'POST',
-      headers: file ? { 'Content-Type': type, 'X-Admin-Code': code } : { 'Content-Type': 'application/json' },
+      headers: file ? { 'Content-Type': type, 'X-Admin-Code-Encoded': encodeURIComponent(code) } : { 'Content-Type': 'application/json' },
       body: file || JSON.stringify({ action: 'music', url, code })
     });
     const data = await response.json();

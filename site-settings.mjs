@@ -11,7 +11,7 @@ function webUrl(value) {
 }
 
 async function sameSecret(input, secret) {
-  if (typeof input !== 'string' || !/^\d{12,32}$/.test(input)) return false;
+  if (typeof input !== 'string' || !input || input.length > 128) return false;
   const encoder = new TextEncoder();
   const digests = await Promise.all([input, secret].map(value =>
     crypto.subtle.digest('SHA-256', encoder.encode(value))));
@@ -34,7 +34,13 @@ const audioPath = '/api/site-settings?audio=';
 const cleanAudio = db => db.prepare("DELETE FROM site_settings WHERE key = 'bgm_audio_type' OR key GLOB 'bgm_audio_part_*'");
 
 async function uploadAudio(request, env) {
-  if (!await sameSecret(request.headers.get('X-Admin-Code'), env.ADMIN_CODE)) return reply({ error: 'code' }, 403);
+  let code = request.headers.get('X-Admin-Code');
+  const encoded = request.headers.get('X-Admin-Code-Encoded');
+  if (encoded !== null) {
+    try { code = decodeURIComponent(encoded); }
+    catch { return reply({ error: 'code' }, 403); }
+  }
+  if (!await sameSecret(code, env.ADMIN_CODE.trim())) return reply({ error: 'code' }, 403);
   const type = request.headers.get('Content-Type');
   if (!['audio/mpeg', 'audio/wav', 'audio/ogg'].includes(type)) return reply({ error: 'format' }, 415);
   if (!request.body) return reply({ error: 'format' }, 400);
@@ -99,7 +105,7 @@ export async function siteSettings(request, env) {
   if (request.method === 'GET') return reply(await settings(env.DB));
   if (request.method !== 'POST') return reply({ error: 'method' }, 405);
   if (request.headers.get('Origin') !== new URL(request.url).origin) return reply({ error: 'origin' }, 403);
-  if (!/^\d{12,32}$/.test(env.ADMIN_CODE || '')) return reply({ error: 'setup' }, 503);
+  if (!env.ADMIN_CODE?.trim()) return reply({ error: 'setup' }, 503);
   if (params.has('upload')) return uploadAudio(request, env);
   if (!/^application\/json(?:;|$)/i.test(request.headers.get('Content-Type') || '')) return reply({ error: 'input' }, 400);
 
@@ -121,7 +127,7 @@ export async function siteSettings(request, env) {
   let data;
   try { data = JSON.parse(body + decoder.decode()); }
   catch { return reply({ error: 'input' }, 400); }
-  if (!await sameSecret(data?.code, env.ADMIN_CODE)) return reply({ error: 'code' }, 403);
+  if (!await sameSecret(data?.code, env.ADMIN_CODE.trim())) return reply({ error: 'code' }, 403);
 
   const db = env.DB;
   const action = data.action;
