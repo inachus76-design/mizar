@@ -118,7 +118,7 @@ export async function siteSettings(request, env) {
     const { value, done } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > 8192) {
+    if (size > 800 * 1024) {
       await reader.cancel();
       return reply({ error: 'input' }, 413);
     }
@@ -131,6 +131,34 @@ export async function siteSettings(request, env) {
 
   const db = env.DB;
   const action = data.action;
+  if (action === 'saveTools') {
+    const current = await settings(db);
+    if (JSON.stringify(current.tools) !== JSON.stringify(data.baseTools)) return reply({ error: 'conflict' }, 409);
+    if (!Array.isArray(data.tools) || data.tools.length > 100) return reply({ error: 'input' }, 400);
+    const validIds = new Set(current.tools.map(item => item.id));
+    const rows = [];
+    for (const item of data.tools) {
+      const id = item?.id;
+      const name = typeof item?.name === 'string' ? item.name.trim() : '';
+      const icon = typeof item?.icon === 'string' ? item.icon.trim() || '✦' : '✦';
+      const description = typeof item?.description === 'string' ? item.description.trim() : '';
+      const url = item?.url === '' ? '' : webUrl(item?.url);
+      if ((id !== null && !validIds.delete(id)) || !name || name.length > 60 ||
+          icon.length > 16 || description.length > 160 || url === null) {
+        return reply({ error: 'input' }, 400);
+      }
+      rows.push({ id, name, url, icon, description });
+    }
+    const existing = rows.filter(row => row.id !== null).map(row => row.id);
+    const encoded = JSON.stringify(rows);
+    const position = "CAST(key AS INTEGER) + 1";
+    const selection = ["value ->> '$.id'", "value ->> '$.name'", "value ->> '$.url'", "value ->> '$.icon'", "value ->> '$.description'", position].join(', ');
+    await db.batch([
+      db.prepare('DELETE FROM classroom_tools WHERE id NOT IN (SELECT value FROM json_each(?))').bind(JSON.stringify(existing)),
+      db.prepare('INSERT INTO classroom_tools(id,name,url,icon,description,sort_order) SELECT ' + selection + ' FROM json_each(?) WHERE 1 ON CONFLICT(id) DO UPDATE SET name=excluded.name,url=excluded.url,icon=excluded.icon,description=excluded.description,sort_order=excluded.sort_order').bind(encoded)
+    ]);
+    return reply(await settings(db));
+  }
   let tool;
   if (action === 'add' || action === 'edit') {
     const name = typeof data.name === 'string' ? data.name.trim() : '';
