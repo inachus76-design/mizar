@@ -1,3 +1,5 @@
+import { siteSettings } from './site-settings.mjs';
+
 const dateInSeoul = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' });
 const json = (value, status = 200) => Response.json(value, {
   status,
@@ -8,6 +10,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
+    if (url.pathname === '/api/site-settings') return siteSettings(request, env);
     if (!['/api/visit', '/api/entry'].includes(url.pathname)) return json({ error: 'Not found' }, 404);
     const reading = url.pathname === '/api/entry' && request.method === 'GET';
     if (!reading && request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
